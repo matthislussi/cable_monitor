@@ -19,7 +19,7 @@
 /******************************************************************************
  * Defines
  *****************************************************************************/
-#define MENU_ENTRY_COUNT		6		///< Number of menu entries
+#define MENU_ENTRY_COUNT		7		///< Number of menu entries
 
 
 /******************************************************************************
@@ -27,7 +27,7 @@
  *****************************************************************************/
 /** Enumeration of possible menu items */
 typedef enum {
-	MENU_ZERO = 0, MENU_ONE, MENU_TWO, MENU_THREE, MENU_FOUR, MENU_FIVE, MENU_NONE
+	MENU_ZERO = 0, MENU_ONE, MENU_TWO, MENU_THREE, MENU_FOUR, MENU_FIVE, MENU_SIX, MENU_NONE
 } MENU_item_t;
 /** Struct with fields of a menu entry */
 typedef struct {

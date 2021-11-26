@@ -106,10 +106,13 @@ void MEAS_GPIO_analog_init(void)
 {
 	__HAL_RCC_GPIOF_CLK_ENABLE();		// Enable Clock for GPIO port F
 	GPIOF->MODER |= (GPIO_MODER_MODER6_Msk);// Analog mode for PF6 = ADC3_IN4
+	GPIOF->MODER |= (GPIO_MODER_MODER8_Msk);// Analog mode for PF8 = ADC3_IN6
 	__HAL_RCC_GPIOC_CLK_ENABLE();		// Enable Clock for GPIO port C
+	GPIOC->MODER |= (GPIO_MODER_MODER1_Msk);// Analog mode for PC1 = ADC123_IN11
 	GPIOC->MODER |= (GPIO_MODER_MODER3_Msk);// Analog mode for PC3 = ADC123_IN13
 	__HAL_RCC_GPIOA_CLK_ENABLE();		// Enable Clock for GPIO port A
 	GPIOA->MODER |= (GPIO_MODER_MODER5_Msk);// Analog mode for PA5 ADC12_IN5
+
 }
 
 
@@ -606,9 +609,12 @@ void MEAS_show_data(void)
 	BSP_LCD_DisplayStringAt(0, 50, (uint8_t *)text, LEFT_MODE);
 	snprintf(text, 15, "2. sample %4d", (int)(ADC_samples[1]));
 	BSP_LCD_DisplayStringAt(0, 80, (uint8_t *)text, LEFT_MODE);
+	snprintf(text, 15, "3. sample %4d", (int)(ADC_samples[1])-(int)ADC_samples[0]);
+	BSP_LCD_DisplayStringAt(0, 110, (uint8_t *)text, LEFT_MODE);
 	/* Draw the  values of input channel 1 as a curve */
 	BSP_LCD_SetTextColor(LCD_COLOR_BLUE);
 	data = ADC_samples[MEAS_input_count*0] / f;
+	BSP_LCD_DrawLine(0, Y_OFFSET, 240, Y_OFFSET);
 	for (uint32_t i = 1; i < ADC_NUMS; i++){
 		data_last = data;
 		data = (ADC_samples[MEAS_input_count*i]) / f;

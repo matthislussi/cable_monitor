@@ -128,6 +128,10 @@ int main(void) {
 			ADC3_IN13_IN4_scan_init();
 			ADC3_IN13_IN4_scan_start();
 			break;
+		case MENU_SIX:
+			ADC3_IN13_IN4_scan_init();
+			ADC3_IN13_IN4_scan_start();
+			break;
 		default:						// Should never occur
 			break;
 		}
