@@ -56,6 +56,7 @@
  * Includes
  *****************************************************************************/
 #include <stdio.h>
+#include <math.h>
 #include "stm32f4xx.h"
 #include "stm32f429i_discovery.h"
 #include "stm32f429i_discovery_lcd.h"
@@ -373,8 +374,8 @@ void ADC2_IN13_IN5_scan_init(void)
 	MEAS_input_count = 2;				// Only 1 input is converted
 	__HAL_RCC_ADC2_CLK_ENABLE();		// Enable Clock for ADC2
 	ADC2->SQR1 |= ADC_SQR1_L_0;			// Convert 2 inputs
-	ADC2->SQR3 |= (13UL << ADC_SQR3_SQ1_Pos);	// Input 13 = first conversion
-	ADC2->SQR3 |= (5UL << ADC_SQR3_SQ2_Pos);	// Input 5 = second conversion
+	ADC2->SQR3 |= (6UL << ADC_SQR3_SQ1_Pos);	// Input 13 = first conversion  neu PF8_
+	ADC2->SQR3 |= (11UL << ADC_SQR3_SQ2_Pos);	// Input 5 = second conversion	neu PC1_
 	ADC2->CR1 |= ADC_CR1_SCAN;			// Enable scan mode
 	ADC2->CR2 |= (1UL << ADC_CR2_EXTEN_Pos);	// En. ext. trigger on rising e.
 	ADC2->CR2 |= (6UL << ADC_CR2_EXTSEL_Pos);	// Timer 2 TRGO event
@@ -578,6 +579,84 @@ void DMA2_Stream4_IRQHandler(void)
 }
 
 
+											//5A single phase:
+double Look_up_table(double peak_V)			//distance:	0		0,5		1		2		3		4		5		6		7		8		9		10
+{											//rms:		150		125		70		40		35		30		24		23		22		21		20		19
+	if((peak_V<200) && (peak_V>=150))		//peack:	2520	2480	2400	2370	2360	2350	2345									2339
+	{
+		return (200-peak_V)/50;
+	}
+	if((peak_V<150) && (peak_V>=100))
+	{
+		return (150-peak_V)/50+1;
+	}
+	if((peak_V<100) && (peak_V>=50))
+	{
+		return ((100-peak_V)/50)*2+2;
+	}
+	if((peak_V<50) && (peak_V>=0))
+	{
+		return ((50-peak_V)/50)*5+5;
+	}
+	else
+	{
+		return 0;
+	}
+}
+
+
+double Offset_ADC_samples(uint32_t adc)
+{
+	uint32_t data;
+	uint32_t data_sum;
+	data_sum = 0;
+
+	data_sum = ADC_samples[adc-1];
+	for(uint32_t i = 1; i < ADC_NUMS; i++){					//signal average of dma stream1
+		data = (ADC_samples[(adc*i)]);
+		data_sum = data_sum + data;
+	}
+
+	return data_sum/ADC_NUMS;
+}
+
+
+double RMS_ADC_samples(uint32_t adc)
+{
+	double adc_T=0.0016666667;
+	double data_p = 0;
+	double data_d;
+	double data_ave = Offset_ADC_samples(adc);
+
+	data_p = (ADC_samples[adc-1]-data_ave)*(ADC_samples[adc-1]-data_ave)*(adc_T);
+
+	for(uint32_t i = 1; i < ADC_NUMS; i++){					//rms without offset of dma stream1
+		data_d = (ADC_samples[(adc*i)]-data_ave);
+		data_p = data_p + data_d*data_d*adc_T;
+	}
+
+	return sqrt(data_p/(ADC_NUMS*adc_T));
+}
+
+
+uint32_t Max_ADC_samples(uint32_t adc)
+{
+	uint32_t data;
+	uint32_t data_max = 0;
+
+	data_max = ADC_samples[adc-1];
+	for(uint32_t i = 1; i < ADC_NUMS; i++){					//max value of dma stream1
+
+		data = (ADC_samples[(adc*i)]);
+		if(data_max < data)
+		{
+			data_max = data;
+		}
+	}
+	return data_max;
+}
+
+
 /** ***************************************************************************
  * @brief Draw buffer data as curves
  *
@@ -597,6 +676,14 @@ void MEAS_show_data(void)
 	const uint32_t f = (1 << ADC_DAC_RES) / Y_OFFSET + 1;	// Scaling factor
 	uint32_t data;
 	uint32_t data_last;
+
+	double data_ave = 0;
+
+	uint32_t data_max = 0;
+	//uint32_t data_min = 0;
+
+	double data_rms = 0;
+	double distance;
 	/* Clear the display */
 	BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
 	BSP_LCD_FillRect(0, 0, X_SIZE, Y_OFFSET+1);
@@ -609,12 +696,44 @@ void MEAS_show_data(void)
 	BSP_LCD_DisplayStringAt(0, 50, (uint8_t *)text, LEFT_MODE);
 	snprintf(text, 15, "2. sample %4d", (int)(ADC_samples[1]));
 	BSP_LCD_DisplayStringAt(0, 80, (uint8_t *)text, LEFT_MODE);
-	snprintf(text, 15, "3. sample %4d", (int)(ADC_samples[1])-(int)ADC_samples[0]);
-	BSP_LCD_DisplayStringAt(0, 110, (uint8_t *)text, LEFT_MODE);
+	//snprintf(text, 15, "3. sample %4d", (int)(ADC_samples[1])-(int)ADC_samples[0]);
+	//BSP_LCD_DisplayStringAt(0, 110, (uint8_t *)text, LEFT_MODE);
 	/* Draw the  values of input channel 1 as a curve */
 	BSP_LCD_SetTextColor(LCD_COLOR_BLUE);
-	data = ADC_samples[MEAS_input_count*0] / f;
 	BSP_LCD_DrawLine(0, Y_OFFSET, 240, Y_OFFSET);
+
+
+	data_ave = Offset_ADC_samples(MEAS_input_count);
+
+	BSP_LCD_SetTextColor(LCD_COLOR_GREEN);
+	snprintf(text, 23, "3. ave %4d", (int)(data_ave));
+	BSP_LCD_DisplayStringAt(0, 110, (uint8_t *)text, LEFT_MODE);
+	if (data_ave / f > Y_OFFSET) { data_ave = Y_OFFSET * f; }// Limit value, prevent crash
+	BSP_LCD_DrawLine(0, Y_OFFSET-data_ave / f, X_SIZE, Y_OFFSET-data_ave / f);
+
+
+	data_rms = RMS_ADC_samples(MEAS_input_count);
+
+	BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
+	snprintf(text, 23, "4. rms %4d", (int)(data_rms));
+	BSP_LCD_DisplayStringAt(0, 130, (uint8_t *)text, LEFT_MODE);
+	/*if (data_rms / f > Y_OFFSET) { data_rms = Y_OFFSET * f; }// Limit value, prevent crash
+		BSP_LCD_DrawLine(0, Y_OFFSET-data_rms / f, X_SIZE, Y_OFFSET-data_rms / f);*/
+
+
+
+	data_max = Max_ADC_samples(MEAS_input_count);
+	distance = Look_up_table(data_max-data_ave)*10;
+
+	BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
+	snprintf(text, 23, "dis %4d %4d", (int)(distance),(int)(data_max));
+	BSP_LCD_DisplayStringAt(0, 20, (uint8_t *)text, LEFT_MODE);
+
+
+
+
+	BSP_LCD_SetTextColor(LCD_COLOR_BLUE);
+	data = ADC_samples[MEAS_input_count*0] / f;
 	for (uint32_t i = 1; i < ADC_NUMS; i++){
 		data_last = data;
 		data = (ADC_samples[MEAS_input_count*i]) / f;
@@ -639,4 +758,7 @@ void MEAS_show_data(void)
 	}
 	ADC_sample_count = 0;
 }
+
+
+
 
