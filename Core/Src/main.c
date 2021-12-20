@@ -62,7 +62,7 @@ int main(void) {
 
 	BSP_TS_Init(BSP_LCD_GetXSize(), BSP_LCD_GetYSize());	// Touchscreen
 	/* Uncomment next line to enable touchscreen interrupt */
-	// BSP_TS_ITConfig();					// Enable Touchscreen interrupt
+	BSP_TS_ITConfig();					// Enable Touchscreen interrupt
 
 	PB_init();							// Initialize the user pushbutton
 	PB_enableIRQ();						// Enable interrupt on user pushbutton
@@ -70,7 +70,8 @@ int main(void) {
 	BSP_LED_Init(LED3);					// Toggles in while loop
 	BSP_LED_Init(LED4);					// Is toggled by user button
 
-	MENU_draw();						// Draw the menu
+	menu_setup();
+	//MENU_draw();						// Draw the menu
 	MENU_hint();						// Show hint at startup
 
 	gyro_disable();						// Disable gyro, use those analog inputs
@@ -81,10 +82,11 @@ int main(void) {
 	/* Infinite while loop */
 	while (1) {							// Infinitely loop in main function
 		BSP_LED_Toggle(LED3);			// Visual feedback when running
+		DMA2_Stream2_IRQHandler();
 
 		if (MEAS_data_ready) {			// Show data if new data available
 			MEAS_data_ready = false;
-			MEAS_show_data();
+			display_single_measurement();
 		}
 
 		if (PB_pressed()) {				// Check if user pushbutton was pressed
@@ -99,34 +101,26 @@ int main(void) {
 		}
 
 		/* Comment next line if touchscreen interrupt is enabled */
-		MENU_check_transition();
+		MENU_check_touch();
 
-		switch (MENU_get_transition()) {	// Handle user menu choice
+		switch (MENU_get_selection()) {	// Handle user menu choice
 		case MENU_NONE:					// No transition => do nothing
 			break;
 		case MENU_ZERO:
-			ADC3_IN4_single_init();
-			ADC3_IN4_single_read();
+			ADC3_IN13_IN4_IN11_IN6_scan_init();
+			ADC3_IN13_IN4_IN11_IN6_scan_start();
 			break;
-		case MENU_ONE:
-			ADC3_IN4_timer_init();
-			ADC3_IN4_timer_start();
+		case MENU_ONE:					//mean
+			ADC3_IN13_4times_scan_init();
+			ADC3_IN13_4times_scan_start();
 			break;
-		case MENU_TWO:
-			ADC3_IN4_DMA_init();
-			ADC3_IN4_DMA_start();
+		case MENU_TWO:					//standard deviation
 			break;
-		case MENU_THREE:
-			ADC1_IN13_ADC2_IN5_dual_init();
-			ADC1_IN13_ADC2_IN5_dual_start();
+		case MENU_THREE:				//angle
 			break;
 		case MENU_FOUR:
-			ADC2_IN13_IN5_scan_init();
-			ADC2_IN13_IN5_scan_start();
 			break;
 		case MENU_FIVE:
-			ADC3_IN13_IN4_scan_init();
-			ADC3_IN13_IN4_scan_start();
 			break;
 		default:						// Should never occur
 			break;
