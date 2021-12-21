@@ -101,7 +101,7 @@ int main(void) {
 		/* Comment next line if touchscreen interrupt is enabled */
 		MENU_check_transition();
 
-		switch (MENU_FIVE/*MENU_get_transition()*/) {	// Handle user menu choice
+		switch (MENU_FOUR/*MENU_get_transition()*/) {	// Handle user menu choice
 		case MENU_NONE:					// No transition => do nothing
 			break;
 		case MENU_ZERO:
@@ -121,8 +121,10 @@ int main(void) {
 			ADC1_IN13_ADC2_IN5_dual_start();
 			break;
 		case MENU_FOUR:
-			ADC2_IN13_IN5_scan_init();
-			ADC2_IN13_IN5_scan_start();
+			//ADC2_IN13_IN5_scan_init();
+			//ADC2_IN13_IN5_scan_start();
+			ADC3_IN11_IN6_scan_init();
+			ADC3_IN11_IN6_scan_start();
 			break;
 		case MENU_FIVE:
 			ADC3_IN13_IN4_scan_init();

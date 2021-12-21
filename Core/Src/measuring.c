@@ -75,6 +75,7 @@
 #define TIM_CLOCK		84000000	///< APB1 timer clock frequency
 #define TIM_TOP			9			///< Timer top value
 #define TIM_PRESCALE	(TIM_CLOCK/ADC_FS/(TIM_TOP+1)-1) ///< Clock prescaler
+#define PAD_GAP			14
 
 
 /******************************************************************************
@@ -113,6 +114,10 @@ void MEAS_GPIO_analog_init(void)
 	GPIOC->MODER |= (GPIO_MODER_MODER3_Msk);// Analog mode for PC3 = ADC123_IN13
 	__HAL_RCC_GPIOA_CLK_ENABLE();		// Enable Clock for GPIO port A
 	GPIOA->MODER |= (GPIO_MODER_MODER5_Msk);// Analog mode for PA5 ADC12_IN5
+	//PAD_r:	GPIO PF6 -> ADC3_IN4
+	//PAD_l:	GPIO PC3 -> ADC123_IN13
+	//HS_r:		GPIO PF8 -> ADC3_IN6
+	//HS_l:		GPIO PC1 -> ADC123_IN11
 
 }
 
@@ -464,6 +469,62 @@ void ADC3_IN13_IN4_scan_start(void)
 
 
 /** ***************************************************************************
+ * @brief Initialize ADC, timer and DMA for sequential acquisition = scan mode
+ *
+ * Uses ADC2 and DMA2_Stream1 channel2
+ * @n The ADC2 trigger is set to TIM2 TRGO event
+ * @n At each trigger both inputs are converted sequentially
+ * and transfered to memory by the DMA.
+ * @n As each conversion triggers the DMA, the number of transfers is doubled.
+ * @n The DMA triggers the transfer complete interrupt when all data is ready.
+ * @n The inputs used are ADC123_IN11 = GPIO PC1 and ADC3_IN6 = GPIO PF8
+ *****************************************************************************/
+void ADC3_IN11_IN6_scan_init(void)
+{
+	MEAS_input_count = 2;				// Only 1 input is converted
+	__HAL_RCC_ADC3_CLK_ENABLE();		// Enable Clock for ADC3
+	ADC3->SQR1 |= ADC_SQR1_L_0;			// Convert 2 inputs
+	ADC3->SQR3 |= (11UL << ADC_SQR3_SQ1_Pos);	// Input 13 = first conversion
+	ADC3->SQR3 |= (6UL << ADC_SQR3_SQ2_Pos);	// Input 4 = second conversion
+	ADC3->CR1 |= ADC_CR1_SCAN;			// Enable scan mode
+	ADC3->CR2 |= (1UL << ADC_CR2_EXTEN_Pos);	// En. ext. trigger on rising e.
+	ADC3->CR2 |= (6UL << ADC_CR2_EXTSEL_Pos);	// Timer 2 TRGO event
+	ADC3->CR2 |= ADC_CR2_DMA;			// Enable DMA mode
+	__HAL_RCC_DMA2_CLK_ENABLE();		// Enable Clock for DMA2
+	DMA2_Stream1->CR &= ~DMA_SxCR_EN;	// Disable the DMA stream 1
+	while (DMA2_Stream1->CR & DMA_SxCR_EN) { ; }	// Wait for DMA to finish
+	DMA2->LIFCR |= DMA_LIFCR_CTCIF1;	// Clear transfer complete interrupt fl.
+	DMA2_Stream1->CR |= (2UL << DMA_SxCR_CHSEL_Pos);	// Select channel 2
+	DMA2_Stream1->CR |= DMA_SxCR_PL_1;		// Priority high
+	DMA2_Stream1->CR |= DMA_SxCR_MSIZE_1;	// Memory data size = 32 bit
+	DMA2_Stream1->CR |= DMA_SxCR_PSIZE_1;	// Peripheral data size = 32 bit
+	DMA2_Stream1->CR |= DMA_SxCR_MINC;	// Increment memory address pointer
+	DMA2_Stream1->CR |= DMA_SxCR_TCIE;	// Transfer complete interrupt enable
+	DMA2_Stream1->NDTR = 2*ADC_NUMS;	// Number of data items to transfer
+	DMA2_Stream1->PAR = (uint32_t)&ADC3->DR;	// Peripheral register address
+	DMA2_Stream1->M0AR = (uint32_t)ADC_samples;	// Buffer memory loc. address
+
+}
+
+
+/** ***************************************************************************
+ * @brief Start DMA, ADC and timer
+ *
+ *****************************************************************************/
+void ADC3_IN11_IN6_scan_start(void)
+{
+	DMA2_Stream1->CR |= DMA_SxCR_EN;	// Enable DMA
+	NVIC_ClearPendingIRQ(DMA2_Stream1_IRQn);	// Clear pending DMA interrupt
+	NVIC_EnableIRQ(DMA2_Stream1_IRQn);	// Enable DMA interrupt in the NVIC
+	ADC3->CR2 |= ADC_CR2_ADON;			// Enable ADC3
+	TIM2->CR1 |= TIM_CR1_CEN;			// Enable timer
+}
+
+
+
+
+
+/** ***************************************************************************
  * @brief Interrupt handler for the timer 2
  *
  * @note This interrupt handler was only used for debugging purposes
@@ -579,25 +640,60 @@ void DMA2_Stream4_IRQHandler(void)
 }
 
 
-											//5A single phase:
-double Look_up_table(double peak_V)			//distance:	0		0,5		1		2		3		4		5		6		7		8		9		10
-{											//rms:		150		125		70		40		35		30		24		23		22		21		20		19
-	if((peak_V<200) && (peak_V>=150))		//peack:	2520	2480	2400	2370	2360	2350	2345									2339
+
+double Look_up_table_peak(double peak_V, double scale)
+{
+	int32_t tppint0 = 210*scale;							//5A single phase:
+	int32_t tppint0p5 = 170*scale;							//distance:	0		0,5		1		2		3		4		5		6		7		8		9		10
+	int32_t tppint1 = 90*scale;								//rms:		150		125		70		40		35		30		24		23		22		21		20		19
+	int32_t tppint2 = 60*scale;								//peak:		2520	2480	2400	2370	2360	2350	2345									2339
+	int32_t tppint3 = 50*scale;								//dc:		2314
+	int32_t tppint4 = 40*scale;								//peak-dc:	206		166		86		56		46		36		31		39		28		27		26		25
+	int32_t tppint5 = 35*scale;
+	int32_t tppint6 = 0*scale;
+	int32_t tppint7 = 0*scale;
+	int32_t tppint8 = 0*scale;
+	int32_t tppint9 = 0*scale;
+	int32_t tppint10 = 20*scale;
+	int32_t tppint11 = 0*scale;
+	//if (voltage_range)
+	//then: output=((voltage_range_max-voltage)/|voltage_range|)*|distance_range|+distcance_offset
+
+
+
+	if((peak_V<tppint0) && (peak_V>=tppint0p5))
 	{
-		return (200-peak_V)/50;
+		return ((tppint0-peak_V)/(tppint0-tppint0p5))/2;
 	}
-	if((peak_V<150) && (peak_V>=100))
+	if((peak_V<tppint0p5) && (peak_V>=tppint1))
 	{
-		return (150-peak_V)/50+1;
+		return ((tppint0p5-peak_V)/(tppint0p5-tppint1))/2+0.5;
 	}
-	if((peak_V<100) && (peak_V>=50))
+	if((peak_V<tppint1) && (peak_V>=tppint2))
 	{
-		return ((100-peak_V)/50)*2+2;
+		return ((tppint1-peak_V)/(tppint1-tppint2))*1+1;
 	}
-	if((peak_V<50) && (peak_V>=0))
+	if((peak_V<tppint2) && (peak_V>=tppint3))
 	{
-		return ((50-peak_V)/50)*5+5;
+		return ((tppint2-peak_V)/(tppint2-tppint3))*1+2;
 	}
+	if((peak_V<tppint3) && (peak_V>=tppint4))
+	{
+		return ((tppint3-peak_V)/(tppint3-tppint4))*1+3;
+	}
+	if((peak_V<tppint4) && (peak_V>=tppint5))
+	{
+		return ((tppint4-peak_V)/(tppint4-tppint5))*1+4;
+	}
+	if((peak_V<tppint5) && (peak_V>=tppint10))
+	{
+		return ((tppint5-peak_V)/(tppint5-tppint10))*5+5;
+	}
+	if((peak_V<tppint10) && (peak_V>=tppint11))
+	{
+		return ((tppint10-peak_V)/(tppint10-tppint11))*1+10;
+	}
+
 	else
 	{
 		return 0;
@@ -605,15 +701,21 @@ double Look_up_table(double peak_V)			//distance:	0		0,5		1		2		3		4		5		6		7		8
 }
 
 
-double Offset_ADC_samples(uint32_t adc)
+double Look_up_table_HS_rms(double rms, double scale)
+{
+	//distance:		0 		0.5		1		1.5		2		10
+}	//rms:			640		180		100		85		85		85
+
+
+double Offset_ADC_samples()
 {
 	uint32_t data;
 	uint32_t data_sum;
 	data_sum = 0;
 
-	data_sum = ADC_samples[adc-1];
+	data_sum = ADC_samples[0+MEAS_input_count-1];
 	for(uint32_t i = 1; i < ADC_NUMS; i++){					//signal average of dma stream1
-		data = (ADC_samples[(adc*i)]);
+		data = (ADC_samples[(i+MEAS_input_count-1)]);
 		data_sum = data_sum + data;
 	}
 
@@ -621,17 +723,17 @@ double Offset_ADC_samples(uint32_t adc)
 }
 
 
-double RMS_ADC_samples(uint32_t adc)
+double RMS_ADC_samples()
 {
 	double adc_T=0.0016666667;
 	double data_p = 0;
 	double data_d;
-	double data_ave = Offset_ADC_samples(adc);
+	double data_ave = Offset_ADC_samples();
 
-	data_p = (ADC_samples[adc-1]-data_ave)*(ADC_samples[adc-1]-data_ave)*(adc_T);
+	data_p = (ADC_samples[0+MEAS_input_count-1]-data_ave)*(ADC_samples[0+MEAS_input_count-1]-data_ave)*(adc_T);
 
 	for(uint32_t i = 1; i < ADC_NUMS; i++){					//rms without offset of dma stream1
-		data_d = (ADC_samples[(adc*i)]-data_ave);
+		data_d = (ADC_samples[(i+MEAS_input_count-1)]-data_ave);
 		data_p = data_p + data_d*data_d*adc_T;
 	}
 
@@ -639,15 +741,15 @@ double RMS_ADC_samples(uint32_t adc)
 }
 
 
-uint32_t Max_ADC_samples(uint32_t adc)
+uint32_t Max_ADC_samples()
 {
 	uint32_t data;
 	uint32_t data_max = 0;
 
-	data_max = ADC_samples[adc-1];
+	data_max = ADC_samples[0+MEAS_input_count-1];
 	for(uint32_t i = 1; i < ADC_NUMS; i++){					//max value of dma stream1
 
-		data = (ADC_samples[(adc*i)]);
+		data = (ADC_samples[(i+MEAS_input_count-1)]);
 		if(data_max < data)
 		{
 			data_max = data;
@@ -655,6 +757,12 @@ uint32_t Max_ADC_samples(uint32_t adc)
 	}
 	return data_max;
 }
+
+double Set_scale()
+{
+	return 2314/Offset_ADC_samples();
+}
+
 
 
 /** ***************************************************************************
@@ -677,13 +785,20 @@ void MEAS_show_data(void)
 	uint32_t data;
 	uint32_t data_last;
 
-	double data_ave = 0;
+	double data_ave1 = 0;
+	double data_ave2 = 0;
 
-	uint32_t data_max = 0;
+	uint32_t data_max1 = 0;
+	uint32_t data_max2 = 0;
 	//uint32_t data_min = 0;
 
-	double data_rms = 0;
+	double data_rms1 = 0;
+	double data_rms2 = 0;
+	double distance1;
+	double distance2;
 	double distance;
+
+	double angle;
 	/* Clear the display */
 	BSP_LCD_SetTextColor(LCD_COLOR_WHITE);
 	BSP_LCD_FillRect(0, 0, X_SIZE, Y_OFFSET+1);
@@ -703,30 +818,38 @@ void MEAS_show_data(void)
 	BSP_LCD_DrawLine(0, Y_OFFSET, 240, Y_OFFSET);
 
 
-	data_ave = Offset_ADC_samples(MEAS_input_count);
+	data_ave1 = Offset_ADC_samples();
+	data_ave2 = Offset_ADC_samples();
 
 	BSP_LCD_SetTextColor(LCD_COLOR_GREEN);
-	snprintf(text, 23, "3. ave %4d", (int)(data_ave));
+	snprintf(text, 23, "3. ave %4d", (int)(data_ave1));
 	BSP_LCD_DisplayStringAt(0, 110, (uint8_t *)text, LEFT_MODE);
-	if (data_ave / f > Y_OFFSET) { data_ave = Y_OFFSET * f; }// Limit value, prevent crash
-	BSP_LCD_DrawLine(0, Y_OFFSET-data_ave / f, X_SIZE, Y_OFFSET-data_ave / f);
+	if (data_ave1 / f > Y_OFFSET) { data_ave1 = Y_OFFSET * f; }// Limit value, prevent crash
+	BSP_LCD_DrawLine(0, Y_OFFSET-data_ave1 / f, X_SIZE, Y_OFFSET-data_ave1 / f);
 
 
-	data_rms = RMS_ADC_samples(MEAS_input_count);
+	data_rms1 = RMS_ADC_samples();
+	data_rms2 = RMS_ADC_samples();
 
 	BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
-	snprintf(text, 23, "4. rms %4d", (int)(data_rms));
+	snprintf(text, 23, "4. rms %4d", (int)(data_rms1));
 	BSP_LCD_DisplayStringAt(0, 130, (uint8_t *)text, LEFT_MODE);
 	/*if (data_rms / f > Y_OFFSET) { data_rms = Y_OFFSET * f; }// Limit value, prevent crash
 		BSP_LCD_DrawLine(0, Y_OFFSET-data_rms / f, X_SIZE, Y_OFFSET-data_rms / f);*/
 
 
 
-	data_max = Max_ADC_samples(MEAS_input_count);
-	distance = Look_up_table(data_max-data_ave)*10;
+	data_max1 = Max_ADC_samples();
+	data_max2 = Max_ADC_samples();
+	distance1 = Look_up_table_peak(data_max1-data_ave1,Set_scale())*10;
+	distance2 = Look_up_table_peak(data_max2-data_ave2,Set_scale())*10;
+
+	distance = sqrt(2*(distance1*distance1+distance2*distance2)-PAD_GAP*PAD_GAP)/2;
+
+	angle = (360/(2*M_PI))*acos((distance1*distance1+distance2*distance2)/(PAD_GAP*sqrt(2*(distance1*distance1+distance2*distance2)-PAD_GAP*PAD_GAP)));
 
 	BSP_LCD_SetTextColor(LCD_COLOR_BLACK);
-	snprintf(text, 23, "dis %4d %4d", (int)(distance),(int)(data_max));
+	snprintf(text, 23, "dis %4d %4d", (int)(distance),(int)(data_max1));
 	BSP_LCD_DisplayStringAt(0, 20, (uint8_t *)text, LEFT_MODE);
 
 
