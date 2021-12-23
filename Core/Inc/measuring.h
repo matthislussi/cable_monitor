@@ -45,6 +45,9 @@ void ADC2_IN13_IN5_scan_init(void);
 void ADC2_IN13_IN5_scan_start(void);
 void ADC3_IN13_IN4_scan_init(void);
 void ADC3_IN13_IN4_scan_start(void);
+void ADC3_IN11_IN6_scan_init(void);
+void ADC3_IN11_IN6_scan_start(void);
+double Look_up_table_peak(double peak_V, double scale);
 
 void MEAS_show_data(void);
 
