@@ -70,8 +70,7 @@ int main(void) {
 	BSP_LED_Init(LED3);					// Toggles in while loop
 	BSP_LED_Init(LED4);					// Is toggled by user button
 
-	menu_setup();
-	//MENU_draw();						// Draw the menu
+	MENU_draw();						// Draw the menu
 	MENU_hint();						// Show hint at startup
 
 	gyro_disable();						// Disable gyro, use those analog inputs
@@ -82,11 +81,10 @@ int main(void) {
 	/* Infinite while loop */
 	while (1) {							// Infinitely loop in main function
 		BSP_LED_Toggle(LED3);			// Visual feedback when running
-		DMA2_Stream2_IRQHandler();
 
 		if (MEAS_data_ready) {			// Show data if new data available
 			MEAS_data_ready = false;
-			display_single_measurement();
+			MEAS_show_data();
 		}
 
 		if (PB_pressed()) {				// Check if user pushbutton was pressed
@@ -101,27 +99,45 @@ int main(void) {
 		}
 
 		/* Comment next line if touchscreen interrupt is enabled */
-		MENU_check_touch();
+		MENU_check_transition();
 
-		switch (MENU_get_selection()) {	// Handle user menu choice
+		switch (MENU_FOUR/*MENU_get_transition()*/) {	// Handle user menu choice
 		case MENU_NONE:					// No transition => do nothing
 			break;
 		case MENU_ZERO:
-			ADC3_IN13_IN4_IN11_IN6_scan_init();
-			ADC3_IN13_IN4_IN11_IN6_scan_start();
+			ADC3_IN4_single_init();
+			ADC3_IN4_single_read();
 			break;
-		case MENU_ONE:					//mean
-			ADC3_IN13_4times_scan_init();
-			ADC3_IN13_4times_scan_start();
+		case MENU_ONE:
+			ADC3_IN4_timer_init();
+			ADC3_IN4_timer_start();
 			break;
-		case MENU_TWO:					//standard deviation
+		case MENU_TWO:
+			ADC3_IN4_DMA_init();
+			ADC3_IN4_DMA_start();
 			break;
-		case MENU_THREE:				//angle
+		case MENU_THREE:
+			ADC1_IN13_ADC2_IN5_dual_init();
+			ADC1_IN13_ADC2_IN5_dual_start();
 			break;
 		case MENU_FOUR:
+			//ADC2_IN13_IN5_scan_init();
+			//ADC2_IN13_IN5_scan_start();
+			//ADC3_IN11_IN6_scan_init();
+			//ADC3_IN11_IN6_scan_start();
+			//ADC3_IN13_IN4_IN11_IN6_scan_init();
+			//ADC3_IN13_IN4_IN11_IN6_scan_start();
+			//ADC3_IN13_IN4_8times_scan_init();
+			//ADC3_IN13_IN4_8times_scan_start();
 			break;
 		case MENU_FIVE:
+			ADC3_IN13_IN4_scan_init();
+			ADC3_IN13_IN4_scan_start();
 			break;
+		/*case MENU_SIX:
+			ADC3_IN13_IN4_scan_init();
+			ADC3_IN13_IN4_scan_start();
+			break;*/
 		default:						// Should never occur
 			break;
 		}

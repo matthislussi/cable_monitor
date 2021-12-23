@@ -14,7 +14,7 @@
  *****************************************************************************/
 #include "stdio.h"
 #include "stdlib.h"
-#include "math.h"
+#include <math.h>
 
 
 
@@ -65,15 +65,26 @@ float standard_deviation(uint32_t ADC_values[], uint32_t length){
 }
 
 /*****************************************************************************
- * angle: needs both distances (a & b) of the electrostatic/magnetic
+ * angle: needs both distances of the electrostatic/magnetic
  * 		  measurements handed over
  *****************************************************************************/
-float angle(float a, float b){
-	float c;
-	if(a >= b){	c = asinf(b/a);
-				return c;}
-	else{	c = asinf(a/b);
-			return c;}
+float angle(float distance1, float distance2){
+	float angle_val;
+	const float dist_pads = 7;
+
+	if(distance1 > distance2){
+		angle_val = acosf((sqrt(2*powf(distance1,4)
+								-powf(distance1,2)*powf(dist_pads,2)
+								-2*powf(distance2,2)*powf(distance1,2)
+								+distance1*dist_pads))/(2*powf(distance1,2)));
+	}else
+	{
+		angle_val = acosf((sqrt(2*powf(distance2,4)
+								-powf(distance2,2)*powf(dist_pads,2)
+								-2*powf(distance1,2)*powf(distance2,2)
+								+distance2*dist_pads))/(2*powf(distance2,2)));
+	}
+	return angle_val;
 }
 
 /*****************************************************************************
