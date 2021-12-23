@@ -62,7 +62,7 @@ int main(void) {
 
 	BSP_TS_Init(BSP_LCD_GetXSize(), BSP_LCD_GetYSize());	// Touchscreen
 	/* Uncomment next line to enable touchscreen interrupt */
-	// BSP_TS_ITConfig();					// Enable Touchscreen interrupt
+	BSP_TS_ITConfig();					// Enable Touchscreen interrupt
 
 	PB_init();							// Initialize the user pushbutton
 	PB_enableIRQ();						// Enable interrupt on user pushbutton
@@ -123,8 +123,12 @@ int main(void) {
 		case MENU_FOUR:
 			//ADC2_IN13_IN5_scan_init();
 			//ADC2_IN13_IN5_scan_start();
-			ADC3_IN11_IN6_scan_init();
-			ADC3_IN11_IN6_scan_start();
+			//ADC3_IN11_IN6_scan_init();
+			//ADC3_IN11_IN6_scan_start();
+			//ADC3_IN13_IN4_IN11_IN6_scan_init();
+			//ADC3_IN13_IN4_IN11_IN6_scan_start();
+			//ADC3_IN13_IN4_8times_scan_init();
+			//ADC3_IN13_IN4_8times_scan_start();
 			break;
 		case MENU_FIVE:
 			ADC3_IN13_IN4_scan_init();
