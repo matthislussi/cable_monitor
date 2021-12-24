@@ -2,7 +2,7 @@
  * measure_options.c
  *
  *
- * Function: Outputs the distance of one Phase
+ * Function: Any kind of analytical function to be included in this file
  *
  *
  *  Created on: 04.12.2021
@@ -14,61 +14,52 @@
  *****************************************************************************/
 #include "stdio.h"
 #include "stdlib.h"
-#include <math.h>
+#include "measuring.h"
+#include "analytics.h"
+#include "math.h"
 
 
 
 /******************************************************************************
  * Defines
  *****************************************************************************/
-
+#define ADC_NUMS		60			///< Number of samples
+#define MEAS_INPUTS		4			///< Number of inputs to be measured
 
 /******************************************************************************
  * Variables
  *****************************************************************************/
 const double pi = M_PI;
 const double u0 = 4*pi/(powf(10, 7));  //permeability of free space
+static RESULT_item_t an_result;
+static MAXVAL_item_t peak;
+
+uint32_t ADC_mean[MEAS_INPUTS*ADC_NUMS];
 
 /******************************************************************************
  * Functions
  *****************************************************************************/
 
 /******************************************************************************
- * mean_val: Determines the mean value of an array
- *****************************************************************************/
-uint32_t mean_val(uint32_t ADC_values[], uint32_t length){
-	uint32_t mean[60];
-
-		for(int i = 0; i <= (length-1); i++){
-			mean[i] = (ADC_values[i*5]+
-					  ADC_values[i*5+1]+
-					  ADC_values[i*5+2]+
-					  ADC_values[i*5+3]+
-					  ADC_values[i*5+4])/5;
-		}
-	return mean;
-}
-
-/******************************************************************************
  * standard_deviation: With the ADC_value array and the length of it
  * 					   the standard deviation gets determined
  *****************************************************************************/
-float standard_deviation(uint32_t ADC_values[], uint32_t length){
+static void standard_deviation(uint32_t ADC_values[], uint32_t length){
 	uint32_t sum = 0;
-	float mean = mean_val(ADC_values, length);
+	//float mean = mean_val(ADC_values, length);
 
 	length += 1;
 	for(int i = 0; i < length; i++){
 		sum	+= powf(mean - ADC_values[i],2);
 	}
-	return (sqrtf(sum/length));
+	an_result.strd_deviation = sqrtf(sum/length);
 }
 
 /*****************************************************************************
  * angle: needs both distances of the electrostatic/magnetic
  * 		  measurements handed over
  *****************************************************************************/
-float angle(float distance1, float distance2){
+static void angle(float distance1, float distance2){
 	float angle_val;
 	const float dist_pads = 7;
 
@@ -77,14 +68,13 @@ float angle(float distance1, float distance2){
 								-powf(distance1,2)*powf(dist_pads,2)
 								-2*powf(distance2,2)*powf(distance1,2)
 								+distance1*dist_pads))/(2*powf(distance1,2)));
-	}else
-	{
+	} else {
 		angle_val = acosf((sqrt(2*powf(distance2,4)
 								-powf(distance2,2)*powf(dist_pads,2)
 								-2*powf(distance1,2)*powf(distance2,2)
 								+distance2*dist_pads))/(2*powf(distance2,2)));
 	}
-	return angle_val;
+	an_result.angle = angle_val;
 }
 
 /*****************************************************************************
@@ -92,25 +82,62 @@ float angle(float distance1, float distance2){
  * 	B: magnetic field strength
  * 	distance: from cable to board
  *****************************************************************************/
-uint32_t current(uint32_t B, uint32_t distance)
+static void current(uint32_t B, uint32_t distance)
 {
 	const double u0 = 4*pi/(powf(10, 7));  //permeability of free space
-	return(2*pi*distance*B/u0);
+	an_result.current = (2*pi*distance*B)/u0;
 }
 
 /*****************************************************************************
- * maxsize: determines biggest value in handed over array
+ * @brief updates the struct peak with the maximal values of all 4 Inputs
+ *
+ * The inputs used are: ADC123_IN13 = GPIO PC3 (pad_l), ADC3_IN4 = GPIO PF6 (pad_r)
+ * 	                    ADC123_IN11 = GPIO PC1 (halsens_l) and ADC3_IN6 = GPIO PF8 (halsens_r)
+ *
+ * Order of Inputs red by ADC: IN13 = 0, IN4 = 1, IN11 = 2, IN6 = 3
  *****************************************************************************/
-uint32_t maxsize(uint32_t array[], uint32_t length, uint32_t offset)
+static void get_max_values(void)
 {
-	uint32_t max_val = array[4*0+offset];
-	for(int i = 1; i <= length; i++){
-		if(max_val < array[4*i+offset]){max_val = array[4*i+offset];}
+	uint32_t maxval[4];
+	for(uint32_t i = 0 ; i <= MEAS_INPUTS ; i++ ){
+		maxval[i] = ADC_mean[MEAS_INPUTS*0+i];
+		for(uint32_t u = 0; u <= ADC_NUMS; u++){
+			if(maxval[i] < ADC_mean[MEAS_INPUTS*u+i]){
+				maxval[i] = ADC_mean[MEAS_INPUTS*u+i];
+			}
+		}
 	}
-	return max_val;
+	peak.pad_l = maxval[0];
+	peak.pad_r = maxval[1];
+	peak.halsens_l = maxval[2];
+	peak.halsens_r = maxval[3];
 }
 
+/** ***************************************************************************
+ * @brief add up arrays to average them in the end
+ *****************************************************************************/
+void samples_add(uint32_t ADC_measurement[]){
+	for(uint32_t i = 0 ; i < (MEAS_INPUTS*ADC_NUMS)-1 ; i++){
+		ADC_mean[i] += ADC_measurement[i];
+	}
+}
 
+/** ***************************************************************************
+ * @brief averages the samples
+ *****************************************************************************/
+uint32_t* samples_mean(void){
+	for(uint32_t i = 0 ; i < (MEAS_INPUTS*ADC_NUMS)-1 ; i++){
+		ADC_mean[i] = ADC_mean[i] / SEQUENZ_MAX;
+	}
+	return ADC_mean;
+}
+
+/** ***************************************************************************
+ * @brief averages the samples
+ *****************************************************************************/
+RESULT_item_t get_Values(void){
+	return an_result;
+}
 
 
 

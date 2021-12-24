@@ -19,6 +19,8 @@
 /******************************************************************************
  * Defines
  *****************************************************************************/
+#define SEQUENZ_MAX     10
+
 extern bool MEAS_data_ready;
 uint32_t MEAS_input_count;
 extern bool DAC_active;

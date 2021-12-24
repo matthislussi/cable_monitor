@@ -125,10 +125,8 @@ int main(void) {
 			//ADC2_IN13_IN5_scan_start();
 			//ADC3_IN11_IN6_scan_init();
 			//ADC3_IN11_IN6_scan_start();
-			//ADC3_IN13_IN4_IN11_IN6_scan_init();
-			//ADC3_IN13_IN4_IN11_IN6_scan_start();
-			//ADC3_IN13_IN4_8times_scan_init();
-			//ADC3_IN13_IN4_8times_scan_start();
+			ADC3_IN13_IN4_IN11_IN6_scan_init();
+			ADC3_IN13_IN4_IN11_IN6_scan_start();
 			break;
 		case MENU_FIVE:
 			ADC3_IN13_IN4_scan_init();
